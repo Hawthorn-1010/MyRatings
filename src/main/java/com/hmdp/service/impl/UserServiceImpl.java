@@ -2,6 +2,7 @@ package com.hmdp.service.impl;
 
 import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
@@ -10,6 +11,8 @@ import com.hmdp.utils.RegexUtils;
 import org.springframework.stereotype.Service;
 
 import javax.servlet.http.HttpSession;
+
+import static com.hmdp.utils.SystemConstants.USER_NICK_NAME_PREFIX;
 
 /**
  * <p>
@@ -38,5 +41,40 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 5. Send code
         log.debug("send code successfully: " + code);
         return Result.ok();
+    }
+
+    @Override
+    public Result login(LoginFormDTO loginForm, HttpSession session) {
+        // 1. check phone number
+        String phone = loginForm.getPhone();
+        if (RegexUtils.isPhoneInvalid(phone)) {
+            return Result.fail("The form of phone is wrong!");
+        }
+
+        // 2. check verification code
+        String code = loginForm.getCode();
+        Object cacheCode = session.getAttribute("code");
+        if (cacheCode == null || !cacheCode.toString().equals(code)) {
+            return Result.fail("verification code is wrong!");
+        }
+
+        // 3. check if this phone number is in database
+        User user = query().eq("phone", phone).one();
+        if (user == null) {
+            // 4. if is null, register
+            user = createUserWithPhone(phone);
+        }
+
+        // 5. return
+        session.setAttribute("user", user);
+        return null;
+    }
+
+    private User createUserWithPhone(String phone) {
+        User user = new User();
+        user.setPhone(phone);
+        user.setNickName(USER_NICK_NAME_PREFIX + RandomUtil.randomString(10));
+        save(user);
+        return user;
     }
 }
