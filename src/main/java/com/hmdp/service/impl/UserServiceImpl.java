@@ -1,16 +1,27 @@
 package com.hmdp.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.bean.copier.CopyOptions;
+import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
+import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
+import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RegexUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static com.hmdp.utils.SystemConstants.USER_NICK_NAME_PREFIX;
 
@@ -25,6 +36,9 @@ import static com.hmdp.utils.SystemConstants.USER_NICK_NAME_PREFIX;
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
     @Override
     public Result sendCode(String phone, HttpSession session) {
         // 1. Check if the phone number is valid
@@ -36,7 +50,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 3. Generate verification code
         String code = RandomUtil.randomString(6);
         // 4. Set in session
-        session.setAttribute("code", code);
+//        session.setAttribute("code", code);
+        stringRedisTemplate.opsForValue().set(RedisConstants.LOGIN_CODE_KEY + phone, code, RedisConstants.LOGIN_CODE_TTL, TimeUnit.MINUTES);
 
         // 5. Send code
         log.debug("send code successfully: " + code);
@@ -51,10 +66,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             return Result.fail("The form of phone is wrong!");
         }
 
-        // 2. check verification code
+        // 2. check verification code from redis
         String code = loginForm.getCode();
-        Object cacheCode = session.getAttribute("code");
-        if (cacheCode == null || !cacheCode.toString().equals(code)) {
+//        Object cacheCode = session.getAttribute("code");
+        String redisCode = stringRedisTemplate.opsForValue().get(RedisConstants.LOGIN_CODE_KEY + phone);
+        if (redisCode == null || !redisCode.equals(code)) {
             return Result.fail("verification code is wrong!");
         }
 
@@ -66,8 +82,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
 
         // 5. return
-        session.setAttribute("user", user);
-        return null;
+//        session.setAttribute("user", BeanUtil.copyProperties(user, UserDTO.class));
+
+        // 6. 保存用户信息到redis中
+        // 6.1. 随机生成token，作为登录令牌
+        String token = UUID.randomUUID().toString();
+
+        // 6.2. 将User对象转换为Hash存储
+        UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
+        Map<String, Object> userMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
+                CopyOptions.create()
+                        .setIgnoreNullValue(true)
+                        .setFieldValueEditor((fieldName, fieldValue) -> fieldValue.toString()));
+
+        // 6.3. 存储
+        stringRedisTemplate.opsForHash().putAll(RedisConstants.LOGIN_USER_KEY + token, userMap);
+        stringRedisTemplate.expire(RedisConstants.LOGIN_USER_KEY + token, RedisConstants.LOGIN_USER_TTL, TimeUnit.MINUTES);
+        // 7. 返回token
+
+        return Result.ok(token);
     }
 
     private User createUserWithPhone(String phone) {
