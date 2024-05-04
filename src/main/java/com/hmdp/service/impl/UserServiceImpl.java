@@ -15,6 +15,7 @@ import com.hmdp.service.IUserService;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RegexUtils;
 import com.hmdp.utils.UserHolder;
+import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +24,7 @@ import javax.servlet.http.HttpSession;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -113,12 +115,43 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 2. 获取日期
         LocalDateTime now = LocalDateTime.now();
         // 3. 拼接key
-        String key = RedisConstants.USER_SIGN_KEY + ":" + StrUtil.toString(userId) + ":" + now.format(DateTimeFormatter.ofPattern("yyyyMM")) + ":";
+        String key = RedisConstants.USER_SIGN_KEY + StrUtil.toString(userId) + ":" + now.format(DateTimeFormatter.ofPattern("yyyyMM")) + ":";
         // 4. 获取今天是本月第几天
         int dayOfMonth = now.getDayOfMonth();
         // 5. 写入redis
         stringRedisTemplate.opsForValue().setBit(key, dayOfMonth - 1, true);
-        return null;
+        return Result.ok();
+    }
+
+    /**
+     * 获取当前用户本月连续签到天数
+     * @return
+     */
+    @Override
+    public Result countSignDays() {
+        // 1. 获取用户
+        Long userId = UserHolder.getUser().getId();
+        // 2. 拼接key
+        LocalDateTime now = LocalDateTime.now();
+        String key = RedisConstants.USER_SIGN_KEY + StrUtil.toString(userId) + ":" + now.format(DateTimeFormatter.ofPattern("yyyyMM")) + ":";
+        int dayOfMonth = now.getDayOfMonth();
+        List<Long> result = stringRedisTemplate.opsForValue().bitField(key,
+                BitFieldSubCommands.create().get(BitFieldSubCommands.BitFieldType.unsigned(dayOfMonth)).valueAt(0));
+
+        if (result == null || result.isEmpty()) {
+            return Result.ok(0);
+        }
+        Long l = result.get(0);
+        if (l == null || l == 0) {
+            return Result.ok(0);
+        }
+        int days = 0;
+        while ((l & 1) != 0) {
+            // 无符号右移
+            l >>>= 1;
+            days++;
+        }
+        return Result.ok(days);
     }
 
     private User createUserWithPhone(String phone) {

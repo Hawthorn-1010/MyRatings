@@ -82,11 +82,21 @@ public class UserController {
 
     /**
      * 用户签到接口
-     * @param userId
+     * @param
      * @return
      */
     @PostMapping("/sign")
-    public Result sign(@PathVariable("id") Long userId){
+    public Result sign(){
         return userService.sign();
+    }
+
+    /**
+     * 用户签到接口
+     * @param
+     * @return
+     */
+    @GetMapping("/sign/count")
+    public Result countSignDays(){
+        return userService.countSignDays();
     }
 }
