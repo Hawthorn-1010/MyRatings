@@ -4,6 +4,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
@@ -13,11 +14,14 @@ import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RegexUtils;
+import com.hmdp.utils.UserHolder;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -100,6 +104,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 7. 返回token
 
         return Result.ok(token);
+    }
+
+    @Override
+    public Result sign() {
+        // 1. 获取当前用户
+        Long userId = UserHolder.getUser().getId();
+        // 2. 获取日期
+        LocalDateTime now = LocalDateTime.now();
+        // 3. 拼接key
+        String key = RedisConstants.USER_SIGN_KEY + ":" + StrUtil.toString(userId) + ":" + now.format(DateTimeFormatter.ofPattern("yyyyMM")) + ":";
+        // 4. 获取今天是本月第几天
+        int dayOfMonth = now.getDayOfMonth();
+        // 5. 写入redis
+        stringRedisTemplate.opsForValue().setBit(key, dayOfMonth - 1, true);
+        return null;
     }
 
     private User createUserWithPhone(String phone) {

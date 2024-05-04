@@ -79,4 +79,14 @@ public class UserController {
         // 返回
         return Result.ok(info);
     }
+
+    /**
+     * 用户签到接口
+     * @param userId
+     * @return
+     */
+    @PostMapping("/sign")
+    public Result sign(@PathVariable("id") Long userId){
+        return userService.sign();
+    }
 }
