@@ -55,6 +55,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
 
         Long userId = UserHolder.getUser().getId();
+        // 因为是一人一单，只需限制一个用户的下单情况，所以可以加上userId
         SimpleRedisLock simpleRedisLock = new SimpleRedisLock("order:" + userId + ":", stringRedisTemplate);
         boolean success = simpleRedisLock.tryLock(5);
 
