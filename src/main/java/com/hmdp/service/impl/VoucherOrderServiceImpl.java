@@ -8,8 +8,9 @@ import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.utils.RedisIdGenerator;
-import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    @Resource
+    private RedissonClient redissonClient;
+
     @Override
     public Result seckillVoucher(Long voucherId) {
         // 1. 查询优惠券
@@ -56,8 +60,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
         Long userId = UserHolder.getUser().getId();
         // 因为是一人一单，只需限制一个用户的下单情况，所以可以加上userId
-        SimpleRedisLock simpleRedisLock = new SimpleRedisLock("order:" + userId + ":", stringRedisTemplate);
-        boolean success = simpleRedisLock.tryLock(5);
+//        SimpleRedisLock simpleRedisLock = new SimpleRedisLock("order:" + userId + ":", stringRedisTemplate);
+//        boolean success = simpleRedisLock.tryLock(5);
+
+        RLock lock = redissonClient.getLock("lock:order:" + userId + ":");
+        // 有多个参数，可以指定在一段时间内尝试获取锁，不指定的话，获取失败直接返回
+        boolean success = lock.tryLock();
 
         // 如果获取锁失败
         if (!success) {
@@ -69,7 +77,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
         } finally {
-            simpleRedisLock.unlock();
+            lock.unlock();
         }
 
     }
