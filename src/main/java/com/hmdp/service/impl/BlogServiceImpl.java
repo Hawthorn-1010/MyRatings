@@ -67,6 +67,10 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
 
     private void addBlogLikeInfo(Blog blog) {
         String key = RedisConstants.BLOG_LIKED_KEY + blog.getId();
+        // 因为/blog/hot接口没有限制登录才能访问，可能没有user信息
+        if (UserHolder.getUser() == null) {
+            return;
+        }
         Long userId = UserHolder.getUser().getId();
         Boolean isMember = stringRedisTemplate.opsForSet().isMember(key, userId.toString());
         blog.setIsLike(isMember);

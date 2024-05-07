@@ -61,7 +61,6 @@ public class BlogController {
 
     @GetMapping("/hot")
     public Result queryHotBlog(@RequestParam(value = "current", defaultValue = "1") Integer current) {
-
         return blogService.queryHotBlog(current);
     }
 
