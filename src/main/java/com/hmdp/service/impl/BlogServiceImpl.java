@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.Result;
+import com.hmdp.dto.ScrollResult;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Blog;
 import com.hmdp.entity.Follow;
@@ -17,9 +18,11 @@ import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.SystemConstants;
 import com.hmdp.utils.UserHolder;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -73,28 +76,6 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         // 查询blog是否被点赞，在前端高亮
         addBlogLikeInfo(blog);
         return Result.ok(blog);
-    }
-
-    private void addBlogLikeInfo(Blog blog) {
-        String key = RedisConstants.BLOG_LIKED_KEY + blog.getId();
-        // 因为/blog/hot接口没有限制登录才能访问，可能没有user信息
-        if (UserHolder.getUser() == null) {
-            return;
-        }
-        Long userId = UserHolder.getUser().getId();
-        Double score = stringRedisTemplate.opsForZSet().score(key, userId.toString());
-        if (score != null) {
-            blog.setIsLike(true);
-        } else {
-            blog.setIsLike(false);
-        }
-    }
-
-    private void addUserInfo(Blog blog) {
-        Long userId = blog.getUserId();
-        User user = userService.getById(userId);
-        blog.setName(user.getNickName());
-        blog.setIcon(user.getIcon());
     }
 
     @Override
@@ -163,6 +144,66 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
 
     @Override
     public Result queryBlogOfFollow(Long max, Integer offset) {
-        return null;
+        //获取当前用户
+        UserDTO user = UserHolder.getUser();
+        //查询收件箱
+        String key="feed:"+user.getId();
+        Set<ZSetOperations.TypedTuple<String>> typedTuples = stringRedisTemplate.opsForZSet()
+                .reverseRangeByScoreWithScores(key, 0, max, offset, 2);
+        //非空判断
+        if (typedTuples==null||typedTuples.isEmpty()){
+            return Result.ok();
+        }
+        //解析数据 blogId minTime offset
+        List<Long> ids=new ArrayList<>(typedTuples.size());
+        long minTime =0;
+        int os=1;
+        for (ZSetOperations.TypedTuple<String> typedTuple : typedTuples) {
+            //获取id
+            String blogId = typedTuple.getValue();
+            ids.add(Long.valueOf(blogId));
+            long time = typedTuple.getScore().longValue();
+            if (time==minTime){
+                os++;
+            }else {
+                minTime = time;
+                os=1;
+            }
+        }
+        //根据 查询blog
+        List<Blog> blogs=new ArrayList<>(ids.size());
+        for (Long id : ids) {
+            Blog blog = getById(id);
+            blogs.add(blog);
+        }
+        blogs.forEach(this::addBlogLikeInfo);
+        //封装 返回
+        ScrollResult scrollResult = new ScrollResult();
+        scrollResult.setList(blogs);
+        scrollResult.setOffset(os);
+        scrollResult.setMinTime(minTime);
+        return Result.ok(scrollResult);
+    }
+
+    private void addUserInfo(Blog blog) {
+        Long userId = blog.getUserId();
+        User user = userService.getById(userId);
+        blog.setName(user.getNickName());
+        blog.setIcon(user.getIcon());
+    }
+
+    private void addBlogLikeInfo(Blog blog) {
+        String key = RedisConstants.BLOG_LIKED_KEY + blog.getId();
+        // 因为/blog/hot接口没有限制登录才能访问，可能没有user信息
+        if (UserHolder.getUser() == null) {
+            return;
+        }
+        Long userId = UserHolder.getUser().getId();
+        Double score = stringRedisTemplate.opsForZSet().score(key, userId.toString());
+        if (score != null) {
+            blog.setIsLike(true);
+        } else {
+            blog.setIsLike(false);
+        }
     }
 }
