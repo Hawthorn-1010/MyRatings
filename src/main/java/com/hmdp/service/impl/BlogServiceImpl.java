@@ -155,15 +155,15 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
             return Result.ok();
         }
         //解析数据 blogId minTime offset
-        List<Long> ids=new ArrayList<>(typedTuples.size());
-        long minTime =0;
-        int os=1;
+        List<Long> ids = new ArrayList<>(typedTuples.size());
+        long minTime = 0;
+        int os = 1;
         for (ZSetOperations.TypedTuple<String> typedTuple : typedTuples) {
             //获取id
             String blogId = typedTuple.getValue();
             ids.add(Long.valueOf(blogId));
             long time = typedTuple.getScore().longValue();
-            if (time==minTime){
+            if (time == minTime){
                 os++;
             }else {
                 minTime = time;
@@ -171,12 +171,10 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
             }
         }
         //根据 查询blog
-        List<Blog> blogs=new ArrayList<>(ids.size());
-        for (Long id : ids) {
-            Blog blog = getById(id);
-            blogs.add(blog);
-        }
+        String idStr = StrUtil.join(",", ids);
+        List<Blog> blogs = query().in("id", ids).last("ORDER BY FIELD (id, " + idStr + ")").list();
         blogs.forEach(this::addBlogLikeInfo);
+        blogs.forEach(this::addUserInfo);
         //封装 返回
         ScrollResult scrollResult = new ScrollResult();
         scrollResult.setList(blogs);
