@@ -73,7 +73,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     private class voucherHandler implements Runnable {
 
-        String queueName = "streams.order";
+        String queueName = "stream.orders";
 
         @Override
         public void run() {
