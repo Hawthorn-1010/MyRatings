@@ -54,7 +54,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private RedissonClient redissonClient;
 
-    private BlockingQueue<VoucherOrder> orderTasks = new ArrayBlockingQueue<>(1024 * 1024);
+//    private BlockingQueue<VoucherOrder> orderTasks = new ArrayBlockingQueue<>(1024 * 1024);
 
     private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
 
@@ -174,13 +174,13 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         } else if (result == 2L) {
             return Result.fail("用户重复下单！");
         }
-        // 2.2 为0，有购买资格，把下单信息保存到阻塞队列
-        VoucherOrder voucherOrder = new VoucherOrder();
-        voucherOrder.setId(voucherOrderId);
-        voucherOrder.setUserId(userId);
-        voucherOrder.setVoucherId(voucherId);
+//        // 2.2 为0，有购买资格，把下单信息保存到阻塞队列
+//        VoucherOrder voucherOrder = new VoucherOrder();
+//        voucherOrder.setId(voucherOrderId);
+//        voucherOrder.setUserId(userId);
+//        voucherOrder.setVoucherId(voucherId);
 
-        orderTasks.add(voucherOrder);
+//        orderTasks.add(voucherOrder);
 
         // 获取代理对象（事务）
         proxy = (IVoucherOrderService) AopContext.currentProxy();
